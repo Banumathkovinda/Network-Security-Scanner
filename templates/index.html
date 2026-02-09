@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Security Scanner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes pulse-border {
+            0%, 100% { border-color: rgb(59 130 246 / 0.5); }
+            50% { border-color: rgb(59 130 246 / 1); }
+        }
+        .scanning { animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-10">
+            <h1 class="text-5xl font-bold mb-4 gradient-bg bg-clip-text text-transparent">
+                <i class="fas fa-shield-alt mr-3"></i>Network Security Scanner
+            </h1>
+            <p class="text-gray-400 text-lg">Modern network reconnaissance and vulnerability assessment tool</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-network-wired text-blue-500 text-2xl mr-3"></i>
+                    <h3 class="text-xl font-semibold">Network Discovery</h3>
+                </div>
+                <p class="text-gray-400 mb-4">Discover active hosts on your network</p>
+                <button onclick="showNetworkScan()" class="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition">
+                    Scan Network
+                </button>
+            </div>
+
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-search text-green-500 text-2xl mr-3"></i>
+                    <h3 class="text-xl font-semibold">Port Scanning</h3>
+                </div>
+                <p class="text-gray-400 mb-4">Analyze open ports and services</p>
+                <button onclick="showPortScan()" class="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition">
+                    Scan Ports
+                </button>
+            </div>
+
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-bug text-red-500 text-2xl mr-3"></i>
+                    <h3 class="text-xl font-semibold">Vulnerability Check</h3>
+                </div>
+                <p class="text-gray-400 mb-4">Identify potential security issues</p>
+                <button onclick="showVulnCheck()" class="w-full bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition">
+                    Check Vulnerabilities
+                </button>
+            </div>
+        </div>
+
+        <div id="scanPanel" class="bg-gray-800 rounded-lg p-6 border border-gray-700 hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="panelTitle" class="text-2xl font-bold"></h2>
+                <button onclick="closePanel()" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="panelContent"></div>
+        </div>
+
+        <div id="results" class="mt-8 hidden">
+            <h2 class="text-2xl font-bold mb-4">Scan Results</h2>
+            <div id="resultsContent" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg p-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p class="text-lg">Scanning in progress...</p>
+        </div>
+    </div>
+
+    <script>
+        function showNetworkScan() {
+            const panel = document.getElementById('scanPanel');
+            const title = document.getElementById('panelTitle');
+            const content = document.getElementById('panelContent');
+            
+            title.textContent = 'Network Discovery';
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Network Range</label>
+                        <input type="text" id="networkRange" placeholder="192.168.1.0/24" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500">
+                        <p class="text-gray-400 text-sm mt-1">Enter network in CIDR notation (e.g., 192.168.1.0/24)</p>
+                    </div>
+                    <button onclick="performNetworkScan()" 
+                            class="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg transition">
+                        <i class="fas fa-play mr-2"></i>Start Scan
+                    </button>
+                </div>
+            `;
+            panel.classList.remove('hidden');
+        }
+
+        function showPortScan() {
+            const panel = document.getElementById('scanPanel');
+            const title = document.getElementById('panelTitle');
+            const content = document.getElementById('panelContent');
+            
+            title.textContent = 'Port Scanning';
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Target Host</label>
+                        <input type="text" id="targetHost" placeholder="192.168.1.1" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Port Range</label>
+                        <select id="portRange" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500">
+                            <option value="quick">Quick Scan (Common Ports)</option>
+                            <option value="1-1000">Standard Scan (1-1000)</option>
+                            <option value="1-65535">Full Scan (All Ports)</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                        <input type="text" id="customPorts" placeholder="80,443,8080" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 mt-2 focus:outline-none focus:border-blue-500 hidden">
+                    </div>
+                    <button onclick="performPortScan()" 
+                            class="bg-green-600 hover:bg-green-700 px-6 py-2 rounded-lg transition">
+                        <i class="fas fa-play mr-2"></i>Start Scan
+                    </button>
+                </div>
+            `;
+            
+            document.getElementById('portRange').addEventListener('change', function() {
+                const customInput = document.getElementById('customPorts');
+                customInput.classList.toggle('hidden', this.value !== 'custom');
+            });
+            
+            panel.classList.remove('hidden');
+        }
+
+        function showVulnCheck() {
+            const panel = document.getElementById('scanPanel');
+            const title = document.getElementById('panelTitle');
+            const content = document.getElementById('panelContent');
+            
+            title.textContent = 'Vulnerability Assessment';
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Target Host</label>
+                        <input type="text" id="vulnHost" placeholder="192.168.1.1" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <button onclick="performVulnCheck()" 
+                            class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg transition">
+                        <i class="fas fa-play mr-2"></i>Check Vulnerabilities
+                    </button>
+                </div>
+            `;
+            panel.classList.remove('hidden');
+        }
+
+        function closePanel() {
+            document.getElementById('scanPanel').classList.add('hidden');
+        }
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('loadingOverlay').classList.add('flex');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+            document.getElementById('loadingOverlay').classList.remove('flex');
+        }
+
+        async function performNetworkScan() {
+            const network = document.getElementById('networkRange').value;
+            if (!network) {
+                alert('Please enter a network range');
+                return;
+            }
+
+            showLoading();
+            try {
+                const response = await fetch('http://127.0.0.1:8080/api/scan/network', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ network })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displayNetworkResults(data);
+            } catch (error) {
+                console.error('Network scan error:', error);
+                alert('Scan failed: ' + error.message + '\n\nMake sure the server is running at http://127.0.0.1:8080');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function performPortScan() {
+            const host = document.getElementById('targetHost').value;
+            const portRange = document.getElementById('portRange').value;
+            
+            if (!host) {
+                alert('Please enter a target host');
+                return;
+            }
+
+            showLoading();
+            try {
+                let endpoint = 'http://127.0.0.1:8080/api/scan/host';
+                let body = { host };
+                
+                if (portRange === 'quick') {
+                    endpoint = 'http://127.0.0.1:8080/api/scan/quick';
+                } else if (portRange === 'custom') {
+                    const customPorts = document.getElementById('customPorts').value;
+                    if (customPorts) {
+                        body.ports = customPorts;
+                    }
+                } else {
+                    body.ports = portRange;
+                }
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displayPortResults(data);
+            } catch (error) {
+                console.error('Port scan error:', error);
+                alert('Scan failed: ' + error.message + '\n\nMake sure the server is running at http://127.0.0.1:8080');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function performVulnCheck() {
+            const host = document.getElementById('vulnHost').value;
+            if (!host) {
+                alert('Please enter a target host');
+                return;
+            }
+
+            showLoading();
+            try {
+                const portResponse = await fetch('http://127.0.0.1:8080/api/scan/quick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ host })
+                });
+                
+                if (!portResponse.ok) {
+                    throw new Error(`HTTP error! status: ${portResponse.status}`);
+                }
+                
+                const portData = await portResponse.json();
+                
+                const ports = Object.entries(portData.tcp || {}).map(([port, info]) => ({
+                    port: parseInt(port),
+                    service: info.name
+                }));
+
+                const vulnResponse = await fetch('http://127.0.0.1:8080/api/vulnerability/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ host, ports })
+                });
+                
+                if (!vulnResponse.ok) {
+                    throw new Error(`HTTP error! status: ${vulnResponse.status}`);
+                }
+                
+                const vulnData = await vulnResponse.json();
+                displayVulnResults(vulnData, portData);
+            } catch (error) {
+                console.error('Vulnerability check error:', error);
+                alert('Vulnerability check failed: ' + error.message + '\n\nMake sure the server is running at http://127.0.0.1:8080');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayNetworkResults(data) {
+            const results = document.getElementById('results');
+            const content = document.getElementById('resultsContent');
+            
+            if (data.error) {
+                content.innerHTML = `<div class="bg-red-900 border border-red-700 rounded-lg p-4">${data.error}</div>`;
+            } else {
+                const hosts = data.hosts || [];
+                content.innerHTML = `
+                    <div class="bg-gray-800 rounded-lg p-6">
+                        <h3 class="text-xl font-semibold mb-4">Live Hosts Found: ${hosts.length}</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            ${hosts.map(host => `
+                                <div class="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-server text-green-500 mr-3"></i>
+                                        <div>
+                                            <p class="font-semibold">${host}</p>
+                                            <p class="text-gray-400 text-sm">Active Host</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            results.classList.remove('hidden');
+            closePanel();
+        }
+
+        function displayPortResults(data) {
+            const results = document.getElementById('results');
+            const content = document.getElementById('resultsContent');
+            
+            if (data.error) {
+                content.innerHTML = `<div class="bg-red-900 border border-red-700 rounded-lg p-4">${data.error}</div>`;
+            } else {
+                const ports = Object.entries(data.tcp || {});
+                content.innerHTML = `
+                    <div class="bg-gray-800 rounded-lg p-6">
+                        <h3 class="text-xl font-semibold mb-4">Port Scan Results for ${data.host}</h3>
+                        <div class="mb-4">
+                            <p class="text-gray-400">Scan Time: ${new Date(data.scan_time).toLocaleString()}</p>
+                            <p class="text-gray-400">Uptime: ${data.uptime}</p>
+                            <p class="text-gray-400">Last Boot: ${data.lastboot}</p>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead>
+                                    <tr class="border-b border-gray-700">
+                                        <th class="pb-3">Port</th>
+                                        <th class="pb-3">State</th>
+                                        <th class="pb-3">Service</th>
+                                        <th class="pb-3">Version</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${ports.map(([port, info]) => `
+                                        <tr class="border-b border-gray-700">
+                                            <td class="py-3">${port}</td>
+                                            <td class="py-3">
+                                                <span class="px-2 py-1 rounded text-xs ${
+                                                    info.state === 'open' ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300'
+                                                }">${info.state}</span>
+                                            </td>
+                                            <td class="py-3">${info.name}</td>
+                                            <td class="py-3">${info.product} ${info.version}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            results.classList.remove('hidden');
+            closePanel();
+        }
+
+        function displayVulnResults(vulnData, portData) {
+            const results = document.getElementById('results');
+            const content = document.getElementById('resultsContent');
+            
+            const vulns = vulnData.vulnerabilities || [];
+            
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <div class="bg-gray-800 rounded-lg p-6">
+                        <h3 class="text-xl font-semibold mb-4">Vulnerability Assessment Results</h3>
+                        ${vulns.length === 0 ? 
+                            '<div class="bg-green-900 border border-green-700 rounded-lg p-4">No obvious vulnerabilities detected</div>' :
+                            `<div class="space-y-4">
+                                ${vulns.map(vuln => `
+                                    <div class="border-l-4 ${
+                                        vuln.severity === 'high' ? 'border-red-500 bg-red-900/20' :
+                                        vuln.severity === 'medium' ? 'border-yellow-500 bg-yellow-900/20' :
+                                        'border-blue-500 bg-blue-900/20'
+                                    } rounded-lg p-4">
+                                        <div class="flex justify-between items-start mb-2">
+                                            <h4 class="font-semibold">${vuln.service.toUpperCase()} on Port ${vuln.port}</h4>
+                                            <span class="px-2 py-1 rounded text-xs ${
+                                                vuln.severity === 'high' ? 'bg-red-700 text-red-200' :
+                                                vuln.severity === 'medium' ? 'bg-yellow-700 text-yellow-200' :
+                                                'bg-blue-700 text-blue-200'
+                                            }">${vuln.severity.toUpperCase()}</span>
+                                        </div>
+                                        <p class="text-gray-300 mb-2">${vuln.description}</p>
+                                        <p class="text-sm text-gray-400"><strong>Recommendation:</strong> ${vuln.recommendation}</p>
+                                    </div>
+                                `).join('')}
+                            </div>`
+                        }
+                    </div>
+                    <div class="bg-gray-800 rounded-lg p-6">
+                        <h4 class="font-semibold mb-3">Open Services</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            ${Object.entries(portData.tcp || {}).map(([port, info]) => `
+                                <div class="bg-gray-700 rounded p-3">
+                                    <span class="font-semibold">${port}</span> - ${info.name}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            results.classList.remove('hidden');
+            closePanel();
+        }
+    </script>
+</body>
+</html>
