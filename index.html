@@ -6,6 +6,7 @@
     <title>Network Security Scanner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         @keyframes pulse-border {
             0%, 100% { border-color: rgb(59 130 246 / 0.5); }
@@ -72,7 +73,12 @@
         </div>
 
         <div id="results" class="mt-8 hidden">
-            <h2 class="text-2xl font-bold mb-4">Scan Results</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Scan Results</h2>
+                <button onclick="downloadPDF()" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition flex items-center">
+                    <i class="fas fa-download mr-2"></i>Download PDF
+                </button>
+            </div>
             <div id="resultsContent" class="space-y-4"></div>
         </div>
     </div>
@@ -85,7 +91,76 @@
     </div>
 
     <script>
+        // Store all scan results for combined PDF download
+        let networkScanResult = null;
+        let portScanResult = null;
+        let vulnScanResult = null;
+
+        function clearResults() {
+            const results = document.getElementById('results');
+            const content = document.getElementById('resultsContent');
+            results.classList.add('hidden');
+            content.innerHTML = '';
+        }
+
+        function downloadPDF() {
+            if (!networkScanResult && !portScanResult && !vulnScanResult) {
+                alert('No scan results to download. Please run at least one scan first.');
+                return;
+            }
+            const { jsPDF } = window.jspdf, doc = new jsPDF();
+            let y = 20, page = 1;
+            const addPage = () => { if (y > 250) { doc.addPage(); y = 20; page++; } };
+            const footer = () => { doc.setFontSize(10); doc.text(`Page ${page}`, 20, 285); doc.text('Network Security Scanner', 120, 285); };
+            
+            doc.setFontSize(20); doc.text('Security Scan Report', 20, y); y += 15;
+            doc.setFontSize(11); doc.text(`Generated: ${new Date().toLocaleString()}`, 20, y); y += 20;
+            
+            if (networkScanResult) {
+                doc.setFontSize(14); doc.text('1. Network Discovery', 20, y); y += 10;
+                doc.setFontSize(11); doc.text(`Range: ${networkScanResult.network_range || 'N/A'}`, 20, y); y += 7;
+                doc.text(`Hosts Found: ${networkScanResult.hosts?.length || 0}`, 20, y); y += 12;
+                networkScanResult.hosts?.forEach((host, i) => {
+                    addPage(); const d = networkScanResult.host_details?.[host];
+                    doc.text(`${i+1}. ${host} - ${d ? d.service + ' (port ' + d.responding_port + ')' : 'Unknown'}`, 25, y); y += 7;
+                });
+                y += 10;
+            }
+            
+            if (portScanResult) {
+                addPage(); doc.setFontSize(14); doc.text('2. Port Scan', 20, y); y += 10;
+                doc.setFontSize(11); doc.text(`Target: ${portScanResult.host || 'N/A'}`, 20, y); y += 7;
+                const openPorts = Object.entries(portScanResult.tcp || {}).filter(([_, i]) => i.state === 'open');
+                doc.text(`Open Ports: ${openPorts.length}`, 20, y); y += 12;
+                openPorts.forEach(([port, info], i) => {
+                    addPage(); doc.text(`${i+1}. Port ${port} - ${info.name || 'Unknown'}`, 25, y); y += 6;
+                    doc.text(`   Product: ${info.product || 'Unknown'}`, 30, y); y += 6;
+                    doc.text(`   Version: ${info.version || 'Unknown'}`, 30, y); y += 10;
+                });
+                y += 10;
+            }
+            
+            if (vulnScanResult) {
+                addPage(); doc.setFontSize(14); doc.text('3. Vulnerabilities', 20, y); y += 10;
+                doc.setFontSize(11); doc.text(`Target: ${vulnScanResult.target || 'N/A'}`, 20, y); y += 7;
+                const vulns = vulnScanResult.vulnerabilities || [];
+                doc.text(`Found: ${vulns.length}`, 20, y); y += 12;
+                vulns.forEach((v, i) => {
+                    addPage(); 
+                    doc.setTextColor(v.severity === 'high' ? 200 : 0, v.severity === 'high' ? 0 : v.severity === 'medium' ? 150 : 100, 0);
+                    doc.text(`${i+1}. [${v.severity.toUpperCase()}] Port ${v.port} - ${v.service}`, 25, y);
+                    doc.setTextColor(0, 0, 0); y += 6;
+                    doc.text(`   ${v.description.substring(0, 75)}${v.description.length > 75 ? '...' : ''}`, 30, y); y += 6;
+                    doc.text(`   Fix: ${v.recommendation.substring(0, 65)}${v.recommendation.length > 65 ? '...' : ''}`, 30, y); y += 12;
+                });
+            }
+            
+            footer();
+            doc.save(`scan-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+        }
+
         function showNetworkScan() {
+            clearResults();
             const panel = document.getElementById('scanPanel');
             const title = document.getElementById('panelTitle');
             const content = document.getElementById('panelContent');
@@ -109,6 +184,7 @@
         }
 
         function showPortScan() {
+            clearResults();
             const panel = document.getElementById('scanPanel');
             const title = document.getElementById('panelTitle');
             const content = document.getElementById('panelContent');
@@ -148,6 +224,7 @@
         }
 
         function showVulnCheck() {
+            clearResults();
             const panel = document.getElementById('scanPanel');
             const title = document.getElementById('panelTitle');
             const content = document.getElementById('panelContent');
@@ -304,29 +381,84 @@
         }
 
         function displayNetworkResults(data) {
-            const results = document.getElementById('results');
-            const content = document.getElementById('resultsContent');
-            
+            networkScanResult = data;
+            const results = document.getElementById('results'), content = document.getElementById('resultsContent');
             if (data.error) {
                 content.innerHTML = `<div class="bg-red-900 border border-red-700 rounded-lg p-4">${data.error}</div>`;
             } else {
-                const hosts = data.hosts || [];
+                let hosts = Array.isArray(data.hosts) ? data.hosts : (data.hosts ? Object.values(data.hosts) : []);
+                const totalScanned = data.total_scanned || 0;
+                const hostDetails = data.host_details || {};
+                const discoveryPorts = data.discovery_ports_checked || [];
+                
                 content.innerHTML = `
                     <div class="bg-gray-800 rounded-lg p-6">
-                        <h3 class="text-xl font-semibold mb-4">Live Hosts Found: ${hosts.length}</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            ${hosts.map(host => `
-                                <div class="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                                    <div class="flex items-center">
-                                        <i class="fas fa-server text-green-500 mr-3"></i>
-                                        <div>
-                                            <p class="font-semibold">${host}</p>
-                                            <p class="text-gray-400 text-sm">Active Host</p>
-                                        </div>
-                                    </div>
+                        <h3 class="text-xl font-semibold mb-4">Network Discovery Results</h3>
+                        
+                        <!-- Summary Banner -->
+                        <div class="mb-4 ${hosts.length > 0 ? 'bg-green-900/30 border-green-700' : 'bg-yellow-900/30 border-yellow-700'} border rounded-lg p-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas ${hosts.length > 0 ? 'fa-check-circle text-green-400' : 'fa-exclamation-triangle text-yellow-400'} mr-2"></i>
+                                    <span class="font-semibold ${hosts.length > 0 ? 'text-green-300' : 'text-yellow-300'}">
+                                        Live Hosts Found: ${hosts.length}
+                                    </span>
                                 </div>
-                            `).join('')}
+                                <div class="text-sm text-gray-400">
+                                    Scanned ${totalScanned} IPs in ${data.network_range || 'network'}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-300">
+                                Discovery method: ${data.discovery_method || 'TCP SYN'} 
+                                (${discoveryPorts.length} ports checked: ${discoveryPorts.slice(0, 5).join(', ')}${discoveryPorts.length > 5 ? '...' : ''})
+                            </div>
                         </div>
+                        
+                        ${!Array.isArray(hosts) ? `
+                            <div class="bg-red-900/20 border border-red-700 rounded-lg p-4">
+                                <p class="text-red-300"><i class="fas fa-exclamation-triangle mr-2"></i>Error: Invalid data format received from server.</p>
+                                <p class="text-gray-400 text-sm mt-2">Please refresh the page and try again.</p>
+                            </div>
+                        ` : hosts.length === 0 ? `
+                            <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
+                                <p class="text-yellow-300"><i class="fas fa-info-circle mr-2"></i>No live hosts detected.</p>
+                                <p class="text-gray-400 text-sm mt-2">
+                                    Possible reasons:<br>
+                                    • Network has no active hosts in this range<br>
+                                    • Hosts are behind firewalls blocking discovery<br>
+                                    • Only use this scanner on networks you own<br>
+                                    • Try a smaller range like /28 (16 hosts) first
+                                </p>
+                            </div>
+                        ` : `
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                ${hosts.map(host => {
+                                    const details = hostDetails[host] || {};
+                                    const port = details.responding_port;
+                                    const service = details.service;
+                                    return `
+                                        <div class="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-green-500 transition">
+                                            <div class="flex items-center mb-2">
+                                                <i class="fas fa-server text-green-500 mr-3 text-xl"></i>
+                                                <div>
+                                                    <p class="font-semibold font-mono text-lg">${host}</p>
+                                                    <p class="text-green-400 text-sm"><i class="fas fa-check-circle mr-1"></i>ACTIVE</p>
+                                                </div>
+                                            </div>
+                                            ${port ? `
+                                                <div class="mt-2 pt-2 border-t border-gray-600">
+                                                    <p class="text-xs text-gray-400">Discovered via:</p>
+                                                    <p class="text-sm">
+                                                        <span class="text-blue-400 font-mono">Port ${port}</span>
+                                                        <span class="text-gray-400">- ${service}</span>
+                                                    </p>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        `}
                     </div>
                 `;
             }
@@ -336,45 +468,43 @@
         }
 
         function displayPortResults(data) {
-            const results = document.getElementById('results');
-            const content = document.getElementById('resultsContent');
-            
+            portScanResult = data;
+            const results = document.getElementById('results'), content = document.getElementById('resultsContent');
             if (data.error) {
                 content.innerHTML = `<div class="bg-red-900 border border-red-700 rounded-lg p-4">${data.error}</div>`;
             } else {
                 const ports = Object.entries(data.tcp || {});
+                const meta = [`Scan Time: ${data.scan_time ? new Date(data.scan_time).toLocaleString() : '—'}`];
+                if (data.uptime) meta.push(`Uptime: ${data.uptime}`);
+                if (data.lastboot) meta.push(`Last Boot: ${data.lastboot}`);
+                const emptyMsg = ports.length === 0 ? '<p class="text-yellow-300 text-sm mt-2">No open TCP ports detected. The host may have no listening services or a firewall may be blocking probes.</p>' : '';
+                const vs = data.scan_metadata?.verification_summary || {};
+                const avgConf = vs.avg_confidence || 0, verified = vs.verified || 0, total = vs.total || ports.length;
+                
                 content.innerHTML = `
                     <div class="bg-gray-800 rounded-lg p-6">
                         <h3 class="text-xl font-semibold mb-4">Port Scan Results for ${data.host}</h3>
-                        <div class="mb-4">
-                            <p class="text-gray-400">Scan Time: ${new Date(data.scan_time).toLocaleString()}</p>
-                            <p class="text-gray-400">Uptime: ${data.uptime}</p>
-                            <p class="text-gray-400">Last Boot: ${data.lastboot}</p>
-                        </div>
+                        <div class="mb-4">${meta.map(m => `<p class="text-gray-400">${m}</p>`).join('')}</div>
+                        ${total > 0 ? `<div class="mb-4 ${avgConf >= 80 ? 'bg-green-900/30 border-green-700' : avgConf >= 50 ? 'bg-yellow-900/30 border-yellow-700' : 'bg-red-900/30 border-red-700'} border rounded-lg p-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center"><i class="fas ${avgConf >= 80 ? 'fa-check-circle text-green-400' : avgConf >= 50 ? 'fa-exclamation-triangle text-yellow-400' : 'fa-times-circle text-red-400'} mr-2"></i>
+                                    <span class="font-semibold ${avgConf >= 80 ? 'text-green-300' : avgConf >= 50 ? 'text-yellow-300' : 'text-red-300'}">${avgConf >= 80 ? 'High' : avgConf >= 50 ? 'Medium' : 'Low'} Confidence</span>
+                                </div>
+                                <div class="text-sm text-gray-400">${verified}/${total} verified (${avgConf}%)</div>
+                            </div>
+                        </div>` : ''}${emptyMsg}
                         <div class="overflow-x-auto">
                             <table class="w-full text-left">
-                                <thead>
+                                <thead><tr class="border-b border-gray-700"><th class="pb-3">Port</th><th class="pb-3">State</th><th class="pb-3">Service</th><th class="pb-3">Version</th><th class="pb-3">Conf</th></tr></thead>
+                                <tbody>${ports.map(([port, info]) => `
                                     <tr class="border-b border-gray-700">
-                                        <th class="pb-3">Port</th>
-                                        <th class="pb-3">State</th>
-                                        <th class="pb-3">Service</th>
-                                        <th class="pb-3">Version</th>
+                                        <td class="py-3 font-mono">${port}</td>
+                                        <td class="py-3"><span class="px-2 py-1 rounded text-xs ${info.state === 'open' ? 'bg-green-900 text-green-300' : 'bg-gray-700'}">${info.state}</span></td>
+                                        <td class="py-3">${info.name}</td>
+                                        <td class="py-3"><span class="${info.product === 'Unknown' ? 'text-yellow-400' : 'text-green-400'}">${info.product}</span> <span class="text-gray-400 text-sm">${info.version}</span></td>
+                                        <td class="py-3"><div class="flex items-center"><div class="w-12 bg-gray-700 rounded-full h-2 mr-2"><div class="bg-${info.confidence >= 80 ? 'green' : info.confidence >= 50 ? 'yellow' : 'red'}-500 h-2 rounded-full" style="width: ${info.confidence || 0}%"></div></div><span class="text-xs ${info.confidence >= 80 ? 'text-green-400' : info.confidence >= 50 ? 'text-yellow-400' : 'text-red-400'}">${info.confidence || 0}%</span></div></td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    ${ports.map(([port, info]) => `
-                                        <tr class="border-b border-gray-700">
-                                            <td class="py-3">${port}</td>
-                                            <td class="py-3">
-                                                <span class="px-2 py-1 rounded text-xs ${
-                                                    info.state === 'open' ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300'
-                                                }">${info.state}</span>
-                                            </td>
-                                            <td class="py-3">${info.name}</td>
-                                            <td class="py-3">${info.product} ${info.version}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
+                                `).join('')}</tbody>
                             </table>
                         </div>
                     </div>
@@ -386,52 +516,33 @@
         }
 
         function displayVulnResults(vulnData, portData) {
-            const results = document.getElementById('results');
-            const content = document.getElementById('resultsContent');
-            
+            vulnScanResult = { target: portData.host || 'Unknown', vulnerabilities: vulnData.vulnerabilities || [] };
+            const results = document.getElementById('results'), content = document.getElementById('resultsContent');
             const vulns = vulnData.vulnerabilities || [];
-            
             content.innerHTML = `
                 <div class="space-y-6">
                     <div class="bg-gray-800 rounded-lg p-6">
                         <h3 class="text-xl font-semibold mb-4">Vulnerability Assessment Results</h3>
-                        ${vulns.length === 0 ? 
-                            '<div class="bg-green-900 border border-green-700 rounded-lg p-4">No obvious vulnerabilities detected</div>' :
-                            `<div class="space-y-4">
-                                ${vulns.map(vuln => `
-                                    <div class="border-l-4 ${
-                                        vuln.severity === 'high' ? 'border-red-500 bg-red-900/20' :
-                                        vuln.severity === 'medium' ? 'border-yellow-500 bg-yellow-900/20' :
-                                        'border-blue-500 bg-blue-900/20'
-                                    } rounded-lg p-4">
-                                        <div class="flex justify-between items-start mb-2">
-                                            <h4 class="font-semibold">${vuln.service.toUpperCase()} on Port ${vuln.port}</h4>
-                                            <span class="px-2 py-1 rounded text-xs ${
-                                                vuln.severity === 'high' ? 'bg-red-700 text-red-200' :
-                                                vuln.severity === 'medium' ? 'bg-yellow-700 text-yellow-200' :
-                                                'bg-blue-700 text-blue-200'
-                                            }">${vuln.severity.toUpperCase()}</span>
-                                        </div>
-                                        <p class="text-gray-300 mb-2">${vuln.description}</p>
-                                        <p class="text-sm text-gray-400"><strong>Recommendation:</strong> ${vuln.recommendation}</p>
+                        ${vulns.length === 0 ? '<div class="bg-green-900 border border-green-700 rounded-lg p-4">No obvious vulnerabilities detected</div>' :
+                            `<div class="space-y-4">${vulns.map(v => `
+                                <div class="border-l-4 ${v.severity === 'high' ? 'border-red-500 bg-red-900/20' : v.severity === 'medium' ? 'border-yellow-500 bg-yellow-900/20' : 'border-blue-500 bg-blue-900/20'} rounded-lg p-4">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <h4 class="font-semibold">${v.service.toUpperCase()} on Port ${v.port}</h4>
+                                        <span class="px-2 py-1 rounded text-xs ${v.severity === 'high' ? 'bg-red-700 text-red-200' : v.severity === 'medium' ? 'bg-yellow-700 text-yellow-200' : 'bg-blue-700 text-blue-200'}">${v.severity.toUpperCase()}</span>
                                     </div>
-                                `).join('')}
-                            </div>`
-                        }
+                                    <p class="text-gray-300 mb-2">${v.description}</p>
+                                    <p class="text-sm text-gray-400"><strong>Fix:</strong> ${v.recommendation}</p>
+                                </div>
+                            `).join('')}</div>`}
                     </div>
                     <div class="bg-gray-800 rounded-lg p-6">
                         <h4 class="font-semibold mb-3">Open Services</h4>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            ${Object.entries(portData.tcp || {}).map(([port, info]) => `
-                                <div class="bg-gray-700 rounded p-3">
-                                    <span class="font-semibold">${port}</span> - ${info.name}
-                                </div>
-                            `).join('')}
+                            ${Object.entries(portData.tcp || {}).map(([port, info]) => `<div class="bg-gray-700 rounded p-3"><span class="font-semibold">${port}</span> - ${info.name}</div>`).join('')}
                         </div>
                     </div>
                 </div>
             `;
-            
             results.classList.remove('hidden');
             closePanel();
         }
