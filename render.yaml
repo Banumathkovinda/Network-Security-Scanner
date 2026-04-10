@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: network-security-scanner
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python simple_scanner.py
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: 8080

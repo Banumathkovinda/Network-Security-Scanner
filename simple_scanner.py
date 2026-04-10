@@ -111,7 +111,8 @@ def check_vulnerabilities():
 
 
 if __name__ == "__main__":
-    print("Starting Network Security Scanner...")
-    print("Open your browser and go to: http://127.0.0.1:8080")
-    print("If that doesn't work, try: http://localhost:8080")
-    app.run(debug=False, host="0.0.0.0", port=8080, threaded=True)
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    print(f"Starting Network Security Scanner on port {port}...")
+    print(f"Open your browser and go to: http://127.0.0.1:{port}")
+    app.run(debug=False, host="0.0.0.0", port=port, threaded=True)
