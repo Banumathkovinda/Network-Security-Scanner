@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
 import socket
 import threading
@@ -98,7 +98,7 @@ scanner = SimpleNetworkScanner()
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return send_from_directory('.', 'index.html')
 
 @app.route('/api/scan/network', methods=['POST'])
 def scan_network():
@@ -188,4 +188,4 @@ if __name__ == '__main__':
     print("Starting Network Security Scanner...")
     print("Open your browser and go to: http://127.0.0.1:8080")
     print("If that doesn't work, try: http://localhost:8080")
-    app.run(debug=False, host='127.0.0.1', port=8080, threaded=True)
+    app.run(debug=False, host='0.0.0.0', port=8080, threaded=True)

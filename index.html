@@ -192,7 +192,7 @@
 
             showLoading();
             try {
-                const response = await fetch('http://127.0.0.1:8080/api/scan/network', {
+                const response = await fetch('/api/scan/network', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ network })
@@ -223,11 +223,11 @@
 
             showLoading();
             try {
-                let endpoint = 'http://127.0.0.1:8080/api/scan/host';
+                let endpoint = '/api/scan/host';
                 let body = { host };
                 
                 if (portRange === 'quick') {
-                    endpoint = 'http://127.0.0.1:8080/api/scan/quick';
+                    endpoint = '/api/scan/quick';
                 } else if (portRange === 'custom') {
                     const customPorts = document.getElementById('customPorts').value;
                     if (customPorts) {
@@ -266,7 +266,7 @@
 
             showLoading();
             try {
-                const portResponse = await fetch('http://127.0.0.1:8080/api/scan/quick', {
+                const portResponse = await fetch('/api/scan/quick', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ host })
@@ -283,7 +283,7 @@
                     service: info.name
                 }));
 
-                const vulnResponse = await fetch('http://127.0.0.1:8080/api/vulnerability/check', {
+                const vulnResponse = await fetch('/api/vulnerability/check', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ host, ports })
